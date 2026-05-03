@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Void Blaster — Space Shooter</title>
+  <style>
+    /* ── Google Font ── */
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #020408;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Share Tech Mono', monospace;
+      color: #00ffcc;
+    }
+
+    /* ── Starfield background ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        radial-gradient(1px 1px at 10% 20%, #fff 0%, transparent 100%),
+        radial-gradient(1px 1px at 40% 60%, #adf 0%, transparent 100%),
+        radial-gradient(1px 1px at 70% 30%, #fff 0%, transparent 100%),
+        radial-gradient(1px 1px at 85% 75%, #adf 0%, transparent 100%),
+        radial-gradient(1px 1px at 25% 85%, #fff 0%, transparent 100%),
+        radial-gradient(1px 1px at 55% 10%, #fff 0%, transparent 100%),
+        radial-gradient(1px 1px at 90% 50%, #adf 0%, transparent 100%),
+        radial-gradient(1px 1px at 15% 50%, #fff 0%, transparent 100%),
+        radial-gradient(1px 1px at 60% 90%, #fff 0%, transparent 100%),
+        radial-gradient(2px 2px at 35% 40%, #6af 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── HUD (score + lives) ── */
+    #hud {
+      display: flex;
+      justify-content: space-between;
+      width: 480px;
+      padding: 8px 4px;
+      font-size: 13px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      z-index: 10;
+    }
+    #hud span { color: #00ffcc; text-shadow: 0 0 8px #00ffcc88; }
+
+    /* ── Canvas ── */
+    canvas {
+      display: block;
+      border: 1px solid #00ffcc44;
+      box-shadow: 0 0 40px #00ffcc22, inset 0 0 60px #00000088;
+      z-index: 10;
+    }
+
+    /* ── Overlay screens ── */
+    #overlay {
+      position: absolute;
+      width: 480px;
+      height: 560px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      z-index: 20;
+      pointer-events: none;
+    }
+    #overlay.hidden { display: none; }
+
+    #overlay h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 36px;
+      font-weight: 900;
+      color: #00ffcc;
+      text-shadow: 0 0 20px #00ffccaa, 0 0 60px #00ffcc44;
+      letter-spacing: 4px;
+      text-align: center;
+    }
+    #overlay p {
+      font-size: 13px;
+      color: #88ffdd;
+      letter-spacing: 2px;
+      text-align: center;
+      line-height: 1.8;
+    }
+    #overlay .big-score {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 48px;
+      color: #ffcc00;
+      text-shadow: 0 0 20px #ffcc0088;
+    }
+
+    #startBtn {
+      pointer-events: all;
+      margin-top: 8px;
+      padding: 12px 36px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      background: transparent;
+      border: 2px solid #00ffcc;
+      color: #00ffcc;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.2s;
+      box-shadow: 0 0 16px #00ffcc44;
+    }
+    #startBtn:hover {
+      background: #00ffcc;
+      color: #020408;
+      box-shadow: 0 0 32px #00ffccaa;
+    }
+
+    /* ── Mobile controls ── */
+    #controls {
+      display: none;
+      gap: 12px;
+      margin-top: 12px;
+      z-index: 10;
+    }
+    @media (max-width: 600px) {
+      #controls { display: flex; }
+      canvas { width: 100vw; height: auto; }
+      #hud { width: 100vw; padding: 8px 12px; }
+      #overlay { width: 100vw; }
+    }
+    .ctrl-btn {
+      padding: 14px 24px;
+      background: #00ffcc22;
+      border: 1px solid #00ffcc66;
+      color: #00ffcc;
+      font-size: 20px;
+      border-radius: 6px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="hud">
+    <span>SCORE: <b id="scoreDisplay">0</b></span>
+    <span>LIVES: <b id="livesDisplay">♥ ♥ ♥</b></span>
+    <span>WAVE: <b id="waveDisplay">1</b></span>
+  </div>
+
+  <!-- The game canvas -->
+  <canvas id="gameCanvas" width="480" height="560"></canvas>
+
+  <!-- Start / Game Over screen -->
+  <div id="overlay">
+    <h1>VOID<br>BLASTER</h1>
+    <p>← → to move &nbsp;|&nbsp; SPACE to shoot<br>Survive the waves!</p>
+    <button id="startBtn" onclick="startGame()">LAUNCH</button>
+  </div>
+
+  <!-- Mobile touch buttons -->
+  <div id="controls">
+    <button class="ctrl-btn" id="btnLeft">◀</button>
+    <button class="ctrl-btn" id="btnShoot">🔥</button>
+    <button class="ctrl-btn" id="btnRight">▶</button>
+  </div>
+
+<script>
+// ═══════════════════════════════════════════
+//  VOID BLASTER — Space Shooter
+//  Learn as you read:
+//  - Canvas drawing
+//  - Game loops (requestAnimationFrame)
+//  - Arrays for bullets & enemies
+//  - Collision detection
+// ═══════════════════════════════════════════
+
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');   // ctx = our "paintbrush"
+
+// ── Game State ──────────────────────────────
+let score, lives, wave, gameRunning, animId;
+let player, bullets, enemies, particles, stars;
+let keys = {};          // which keys are currently held down
+let shootCooldown = 0;  // prevents shooting too fast
+
+// ── Constants ───────────────────────────────
+const W = canvas.width;   // 480
+const H = canvas.height;  // 560
+const PLAYER_SPEED  = 5;
+const BULLET_SPEED  = 8;
+const ENEMY_ROWS    = 3;
+const ENEMY_COLS    = 8;
+const SHOOT_DELAY   = 18;  // frames between shots
+
+// ── Star field (background) ─────────────────
+function makeStars() {
+  stars = [];
+  for (let i = 0; i < 80; i++) {
+    stars.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.5 + 0.2,
+      speed: Math.random() * 0.4 + 0.1,
+      bright: Math.random()
+    });
+  }
+}
+
+// ── Player object ────────────────────────────
+function makePlayer() {
+  return {
+    x: W / 2,         // start in the center
+    y: H - 56,
+    w: 36, h: 36,
+    color: '#00ffcc'
+  };
+}
+
+// ── Create the enemy grid ────────────────────
+function makeEnemies() {
+  enemies = [];
+  const cols = ENEMY_COLS + wave - 1;   // more columns each wave
+  const spacingX = Math.min(52, (W - 40) / cols);
+  const offsetX  = (W - cols * spacingX) / 2;
+
+  for (let row = 0; row < ENEMY_ROWS; row++) {
+    for (let col = 0; col < cols; col++) {
+      enemies.push({
+        x: offsetX + col * spacingX + spacingX / 2,
+        y: 60 + row * 44,
+        w: 28, h: 22,
+        alive: true,
+        // Enemies move as a group — shared direction stored on array
+      });
+    }
+  }
+  enemies.dx = 1 + wave * 0.3;   // horizontal speed (faster each wave)
+  enemies.dy = 0;
+  enemies.dropTimer = 0;
+}
+
+// ── Particle explosion ───────────────────────
+function explode(x, y, color, count = 12) {
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
+    const speed = Math.random() * 3 + 1;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,           // 1 = full opacity, fades to 0
+      decay: 0.04 + Math.random() * 0.03,
+      r: Math.random() * 3 + 1,
+      color
+    });
+  }
+}
+
+// ── Draw the player spaceship ────────────────
+function drawPlayer(p) {
+  ctx.save();
+  ctx.translate(p.x, p.y);
+
+  // Engine glow
+  ctx.shadowBlur  = 18;
+  ctx.shadowColor = '#00ffcc';
+
+  // Body (triangle)
+  ctx.fillStyle = '#00ffcc';
+  ctx.beginPath();
+  ctx.moveTo(0, -p.h / 2);         // tip top
+  ctx.lineTo(-p.w / 2, p.h / 2);  // bottom-left
+  ctx.lineTo( p.w / 2, p.h / 2);  // bottom-right
+  ctx.closePath();
+  ctx.fill();
+
+  // Cockpit window
+  ctx.fillStyle = '#002211';
+  ctx.beginPath();
+  ctx.arc(0, -4, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Thruster flame (animated with random size)
+  ctx.fillStyle = '#ff6600';
+  ctx.shadowColor = '#ff6600';
+  ctx.beginPath();
+  const flameH = 8 + Math.random() * 8;
+  ctx.moveTo(-8, p.h / 2);
+  ctx.lineTo(0, p.h / 2 + flameH);
+  ctx.lineTo(8, p.h / 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ── Draw an enemy ────────────────────────────
+function drawEnemy(e) {
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.shadowBlur  = 10;
+  ctx.shadowColor = '#ff3366';
+
+  // Body
+  ctx.fillStyle = '#ff3366';
+  ctx.beginPath();
+  ctx.moveTo(0, -e.h / 2);
+  ctx.lineTo(-e.w / 2, 0);
+  ctx.lineTo(-e.w / 3, e.h / 2);
+  ctx.lineTo( e.w / 3, e.h / 2);
+  ctx.lineTo( e.w / 2, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Eyes
+  ctx.fillStyle = '#ffcc00';
+  ctx.beginPath(); ctx.arc(-6, 0, 3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc( 6, 0, 3, 0, Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+// ── Draw a bullet ────────────────────────────
+function drawBullet(b) {
+  ctx.save();
+  ctx.shadowBlur  = 10;
+  ctx.shadowColor = b.color;
+  ctx.fillStyle   = b.color;
+  ctx.fillRect(b.x - 2, b.y - 8, 4, 12);
+  ctx.restore();
+}
+
+// ── Draw background stars ────────────────────
+function drawStars() {
+  stars.forEach(s => {
+    const alpha = 0.3 + s.bright * 0.7;
+    ctx.fillStyle = `rgba(200,230,255,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+// ── Update star positions (parallax scroll) ──
+function updateStars() {
+  stars.forEach(s => {
+    s.y += s.speed;
+    if (s.y > H) { s.y = 0; s.x = Math.random() * W; }
+  });
+}
+
+// ── Update particles ─────────────────────────
+function updateParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x    += p.vx;
+    p.y    += p.vy;
+    p.life -= p.decay;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+
+    ctx.save();
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle   = p.color;
+    ctx.shadowBlur  = 8;
+    ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ── Simple rectangle collision check ─────────
+function hitTest(ax, ay, aw, ah, bx, by, bw, bh) {
+  return ax - aw/2 < bx + bw/2 &&
+         ax + aw/2 > bx - bw/2 &&
+         ay - ah/2 < by + bh/2 &&
+         ay + ah/2 > by - bh/2;
+}
+
+// ── Update HUD text ───────────────────────────
+function updateHUD() {
+  document.getElementById('scoreDisplay').textContent = score;
+  document.getElementById('livesDisplay').textContent = '♥ '.repeat(lives).trim();
+  document.getElementById('waveDisplay').textContent  = wave;
+}
+
+// ── Enemy random shooting ─────────────────────
+let enemyShootTimer = 0;
+function enemyShoot() {
+  enemyShootTimer--;
+  if (enemyShootTimer > 0) return;
+  enemyShootTimer = 50 - wave * 4;  // shoots faster each wave
+
+  // Pick a random alive enemy to shoot
+  const alive = enemies.filter(e => e.alive);
+  if (!alive.length) return;
+  const shooter = alive[Math.floor(Math.random() * alive.length)];
+  bullets.push({ x: shooter.x, y: shooter.y, vy: 5, color: '#ff3366', isEnemy: true });
+}
+
+// ═══════════════════════════════════════════
+//  MAIN GAME LOOP — runs ~60 times per second
+// ═══════════════════════════════════════════
+function gameLoop() {
+  if (!gameRunning) return;
+  animId = requestAnimationFrame(gameLoop);  // schedule next frame
+
+  // Clear canvas
+  ctx.clearRect(0, 0, W, H);
+
+  // Draw starfield
+  updateStars();
+  drawStars();
+
+  // ── Move player ──────────────────────────
+  if ((keys['ArrowLeft']  || keys['a']) && player.x > player.w / 2)
+    player.x -= PLAYER_SPEED;
+  if ((keys['ArrowRight'] || keys['d']) && player.x < W - player.w / 2)
+    player.x += PLAYER_SPEED;
+
+  // ── Player shooting ───────────────────────
+  shootCooldown--;
+  if ((keys[' '] || keys['btnShoot']) && shootCooldown <= 0) {
+    bullets.push({ x: player.x, y: player.y - player.h / 2, vy: -BULLET_SPEED, color: '#00ffcc', isEnemy: false });
+    shootCooldown = SHOOT_DELAY;
+  }
+
+  // ── Move enemy swarm ──────────────────────
+  let hitWall = false;
+  enemies.forEach(e => {
+    if (!e.alive) return;
+    e.x += enemies.dx;
+    if (e.x > W - 20 || e.x < 20) hitWall = true;
+  });
+  if (hitWall) {
+    enemies.dx *= -1;         // reverse direction
+    enemies.forEach(e => { if (e.alive) e.y += 18; });  // drop down
+  }
+
+  // ── Enemy shooting ────────────────────────
+  enemyShoot();
+
+  // ── Move bullets ──────────────────────────
+  for (let i = bullets.length - 1; i >= 0; i--) {
+    bullets[i].y += bullets[i].vy;
+    // Remove if off screen
+    if (bullets[i].y < -10 || bullets[i].y > H + 10) {
+      bullets.splice(i, 1);
+    }
+  }
+
+  // ── Collision: player bullets vs enemies ──
+  for (let bi = bullets.length - 1; bi >= 0; bi--) {
+    const b = bullets[bi];
+    if (b.isEnemy) continue;
+
+    for (let ei = 0; ei < enemies.length; ei++) {
+      const e = enemies[ei];
+      if (!e.alive) continue;
+      if (hitTest(b.x, b.y, 4, 14, e.x, e.y, e.w, e.h)) {
+        e.alive = false;
+        bullets.splice(bi, 1);
+        score += 10 * wave;
+        explode(e.x, e.y, '#ff3366');
+        updateHUD();
+        break;
+      }
+    }
+  }
+
+  // ── Collision: enemy bullets vs player ────
+  for (let bi = bullets.length - 1; bi >= 0; bi--) {
+    const b = bullets[bi];
+    if (!b.isEnemy) continue;
+    if (hitTest(b.x, b.y, 4, 14, player.x, player.y, player.w, player.h)) {
+      bullets.splice(bi, 1);
+      lives--;
+      explode(player.x, player.y, '#00ffcc', 20);
+      updateHUD();
+      if (lives <= 0) { endGame(); return; }
+    }
+  }
+
+  // ── Check if any enemy reaches the bottom ─
+  enemies.forEach(e => {
+    if (e.alive && e.y > H - 40) { endGame(); }
+  });
+
+  // ── Check if wave cleared ─────────────────
+  if (enemies.every(e => !e.alive)) {
+    wave++;
+    updateHUD();
+    makeEnemies();
+    bullets = [];
+  }
+
+  // ── Draw everything ───────────────────────
+  enemies.forEach(e => { if (e.alive) drawEnemy(e); });
+  bullets.forEach(b => drawBullet(b));
+  drawPlayer(player);
+  updateParticles();
+}
+
+// ── Start game ───────────────────────────────
+function startGame() {
+  document.getElementById('overlay').classList.add('hidden');
+  score = 0; lives = 3; wave = 1;
+  player    = makePlayer();
+  bullets   = [];
+  particles = [];
+  enemyShootTimer = 60;
+  shootCooldown   = 0;
+  makeStars();
+  makeEnemies();
+  updateHUD();
+  gameRunning = true;
+  if (animId) cancelAnimationFrame(animId);
+  gameLoop();
+}
+
+// ── End game ─────────────────────────────────
+function endGame() {
+  gameRunning = false;
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `
+    <h1>GAME<br>OVER</h1>
+    <div class="big-score">${score}</div>
+    <p>WAVE ${wave} &nbsp;|&nbsp; FINAL SCORE</p>
+    <button id="startBtn" onclick="startGame()">RETRY</button>
+  `;
+  ov.classList.remove('hidden');
+}
+
+// ── Keyboard listeners ───────────────────────
+window.addEventListener('keydown', e => { keys[e.key] = true;  e.preventDefault(); });
+window.addEventListener('keyup',   e => { keys[e.key] = false; });
+
+// ── Mobile touch buttons ─────────────────────
+['btnLeft','btnRight','btnShoot'].forEach(id => {
+  const btn = document.getElementById(id);
+  const key = id === 'btnLeft' ? 'ArrowLeft' : id === 'btnRight' ? 'ArrowRight' : ' ';
+  btn.addEventListener('touchstart', e => { e.preventDefault(); keys[key] = true; });
+  btn.addEventListener('touchend',   e => { e.preventDefault(); keys[key] = false; });
+});
+</script>
+</body>
+</html>
